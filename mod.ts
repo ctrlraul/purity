@@ -69,7 +69,7 @@ class Checker<T = unknown>
 			return value;
 		}
 
-		throw new TypeError(`Expected (${this.typeString}), got (${Checker.getTypeString(value)}) instead`);
+		throw new CheckerError(this.typeString, Checker.getTypeString(value));
 	}
 
 
@@ -102,6 +102,18 @@ class Checker<T = unknown>
 		}
 
 		return '{ ' + entries.map(([k, v]) => k + ': ' + Checker.getTypeString(v)).join(', ') + ' }';
+	}
+}
+
+class CheckerError extends TypeError {
+
+	public expected: string;
+	public received: string;
+
+	constructor(expected: string, received: string) {
+		super(`Expected '${expected}' but received '${received}'`);
+		this.expected = expected;
+		this.received = received;
 	}
 }
 
