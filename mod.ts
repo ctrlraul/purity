@@ -1,3 +1,10 @@
+/**
+ * All type checkers and utilities of the library.
+ * @module
+ */
+
+
+
 type ExtractTuple<A extends Checker[]> = {
     [K in keyof A]: CheckerType<A[K]>;
 };
