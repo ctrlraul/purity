@@ -2,5 +2,16 @@
 	"name": "@purity/purity",
 	"version": "0.1.0",
 	"license": "MIT",
-	"exports": "./mod.ts"
+	"exports": "./mod.ts",
+	"imports": {
+		"@std/expect": "jsr:@std/expect@^1.0.10"
+	},
+    "publish": {
+        "exclude": [
+          "**"
+        ],
+        "include": [
+            "./mod.ts"
+        ]
+    }
 }
