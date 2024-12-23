@@ -1,4 +1,4 @@
-type ExtractTuple<A extends Checker<unknown>[]> = {
+type ExtractTuple<A extends Checker[]> = {
     [K in keyof A]: CheckerType<A[K]>;
 };
 
@@ -7,7 +7,7 @@ type CheckerOptions = {
 	check: Checker['check'];
 };
 
-type CheckerType<C extends Checker<unknown>> = C extends Checker<infer T> ? T : unknown;
+type CheckerType<C extends Checker> = C extends Checker<infer T> ? T : unknown;
 
 
 
@@ -111,6 +111,11 @@ const unionSeparator = ' | ';
 
 
 
+const $never: Checker<never> = new Checker<never>({
+	typeString: 'never',
+	check(_value) { return false },
+});
+
 const $undefined: Checker<undefined> = new Checker<undefined>({
 	typeString: 'undefined',
 	check(value) { return typeof value === 'undefined' },
@@ -148,15 +153,17 @@ const $symbol: Checker<symbol> = new Checker<symbol>({
 
 
 
-function $array<T extends Checker<unknown>[] | [Checker<unknown>]>(...checkers: T): Checker<CheckerType<T[number]>[]> {
+function $array<T extends Checker[] | [Checker]>(...checkers: T): Checker<CheckerType<T[number]>[]> {
 
-	const checker = checkers.length > 1
-		? $union(...checkers)
-		: checkers[0];
+	let checker: Checker;
 
-	const typeString = checkers.length > 1
-		? '(' + checker.typeString + '[]'
-		: checker.typeString + '[]'
+	switch (checkers.length) {
+		case 0: checker = $never; break;
+		case 1: checker = checkers[0]; break;
+		default: checker = $union(...checkers); break;
+	}
+
+	const typeString = (checkers.length > 1 ? '(' + checker.typeString + ')' : checker.typeString) + '[]';
 
 	return new Checker({
 
@@ -169,11 +176,10 @@ function $array<T extends Checker<unknown>[] | [Checker<unknown>]>(...checkers: 
 	});
 }
 
-function $record<T extends Record<string, Checker<unknown>>>(record: T): Checker<{ [K in keyof T]: CheckerType<T[K]> }> {
+function $object<T extends Record<string, Checker>>(record: T): Checker<{ [K in keyof T]: CheckerType<T[K]> }> {
 
-	const entries = Object.entries(record);
-
-	const propertyStrings = entries.map(([key, Type]) => key + ': ' + Type.typeString);
+	const checkerEntries = Object.entries(record);
+	const propertyStrings = checkerEntries.map(([key, checker]) => key + ': ' + checker.typeString);
 	const typeString = '{ ' + propertyStrings.join(', ') + ' }';
   
 	return new Checker({
@@ -181,19 +187,68 @@ function $record<T extends Record<string, Checker<unknown>>>(record: T): Checker
 		typeString,
 		
 		check(value) {
+
+			if (typeof value !== 'object' || value === null)
+				return false;
+
+			for (const [key, checker] of checkerEntries) {
+				if (!checker.check(value[key]))
+					return false;
+			}
+
+			return true;
+		},
+
+	});
+}
+
+/** Similar to object but will also fail if extra properties
+ * exist even if the type of the expected properties matche */
+function $objectStrict<T extends Record<string, Checker>>(record: T): Checker<{ [K in keyof T]: CheckerType<T[K]> }> {
+
+	const checkerEntries = Object.entries(record);
+	const propertyStrings = checkerEntries.map(([key, checker]) => key + ': ' + checker.typeString);
+	const typeString = '{ ' + propertyStrings.join(', ') + ' }';
+  
+	return new Checker({
+
+		typeString,
+		
+		check(value) {
+
+			if (typeof value !== 'object' || value === null)
+				return false;
+
+			// What makes this strict
+			if (!Object.keys(value).every(key => key in record))
+				return false;
+
+			for (const [key, checker] of checkerEntries) {
+				if (!checker.check(value[key]))
+					return false;
+			}
+
+			return true;
+		},
+
+	});
+}
+
+function $record<T extends Checker>(valueChecker: T): Checker<Record<string, CheckerType<T>>> {
+	return new Checker({
+
+		typeString: '{ [key: string]: ' + valueChecker.typeString + ' }',
+		
+		check(value) {
 			return (
 				typeof value === 'object'
 				&& value !== null
-				&& entries.every(([key, Type]) => {
-					// @tss-ignore 
-					return Type.check(value[key]);
-				})
+				&& Object.values(value).every(valueChecker.check)
 			);
 		},
   
 	});
 }
-
 
 
 function $literal<T extends (string | number)[]>(...literals: T): Checker<T[number]> {
@@ -253,7 +308,7 @@ function $tuple<T extends Checker[]>(...checkers: T): Checker<ExtractTuple<T>> {
 	});
 }
 
-function $union<T extends Checker<unknown>[]>(...checkers: T): Checker<CheckerType<T[number]>> {
+function $union<T extends Checker[]>(...checkers: T): Checker<CheckerType<T[number]>> {
 	return new Checker({
 
 		typeString: checkers.map(type => type.typeString).join(unionSeparator),
@@ -271,6 +326,7 @@ export {
 	Checker,
 	type CheckerType,
 
+	$never,
 	$undefined,
 	$null,
 	$boolean,
@@ -280,6 +336,8 @@ export {
 	$symbol,
 
 	$array,
+	$object,
+	$objectStrict,
 	$record,
 
 	$literal,
