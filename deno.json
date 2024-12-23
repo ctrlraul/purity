@@ -8,10 +8,10 @@
 	},
     "publish": {
         "exclude": [
-          "**"
-        ],
-        "include": [
-            "./mod.ts"
+          "./deno.*",
+          "./LICENSE",
+          "./README.md",
+          "./test.ts"
         ]
     }
 }
